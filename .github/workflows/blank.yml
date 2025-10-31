@@ -11,9 +11,70 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Restore minimal server ZIP
+      # 1. Repository auschecken – initial nur Kern-Dateien & eine Welt laden
+      - name: Clone repo with progress
+        run: |
+          git config --global protocol.version 2
+          GIT_TERMINAL_PROMPT=1 \
+          git clone --depth 1 --progress https://github.com/jxlly05/worlds7242.git .
+          
+      # 2. Java 21 installieren
+      - name: Setup Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # 3. RAM & Festplattenplatz prüfen
+      - name: Check system memory and disk space
+        run: |
+          echo "==== RAM ===="
+          free -h
+          echo ""
+          echo "==== Festplattenplatz auf Runner ===="
+          df -h /
+
+      - name: Install Playit.gg
         run: |
           curl -SsL https://playit-cloud.github.io/ppa/key.gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/playit.gpg >/dev/null
           echo "deb [signed-by=/etc/apt/trusted.gpg.d/playit.gpg] https://playit-cloud.github.io/ppa/data ./" | sudo tee /etc/apt/sources.list.d/playit-cloud.list
           sudo apt update
           sudo apt install playit
+
+
+      
+      # 5. Finaler Commit/PUSH
+      - name: Force-push server data to repo
+        run: |
+          sleep 10
+          cd "$GITHUB_WORKSPACE"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+      
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/jxlly05/worlds7242.git
+      
+          [ -f ".git/index.lock" ] && rm -f .git/index.lock
+      
+          git add -A
+          # Sicherstellen, dass .github/ nicht gestaged ist
+          git reset HEAD .github || true
+      
+          git commit -m "Finaler Push | Minecraft Server" || echo "No changes to commit"
+      
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "[Autosave] (Versuch $attempt/$max_attempts) Versuche, Änderungen zu pushen..."
+            if git push origin HEAD:main --force; then
+              echo "[Autosave] Push erfolgreich!"
+              break
+            else
+              if [ $attempt -eq $max_attempts ]; then
+                echo "[Autosave] Push nach $max_attempts Versuchen fehlgeschlagen. Breche ab."
+                exit 1
+              fi
+              echo "[Autosave] Push fehlgeschlagen, warte 10 Sekunden und versuche erneut..."
+              sleep 10
+            fi
+            attempt=$((attempt + 1))
+          done
