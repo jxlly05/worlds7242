@@ -41,7 +41,6 @@ jobs:
           sudo apt update
           sudo apt install playit
           
-          playit
           echo probiere !playit
           !playit
 
